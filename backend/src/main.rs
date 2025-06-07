@@ -3,8 +3,7 @@ mod ingest;
 use std::env;
 use ingest::extract_text_from_pdf;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Simple CLI: expect `ingest <pdf_path> <patent_id>`
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_default();
@@ -26,3 +25,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+mod chunker;
