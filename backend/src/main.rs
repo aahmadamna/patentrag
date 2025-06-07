@@ -1,4 +1,4 @@
-mod ingest;
+mod ingest; mod chunker;
 
 use std::env;
 use ingest::extract_text_from_pdf;
@@ -17,6 +17,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 1. Extract all text
         let full_text = extract_text_from_pdf(&pdf_path)?;
         println!("✅ Extracted {} characters of text", full_text.len());
+        //` 2. Chunk the text
+        let chunks = chunker::chunk_text(&full_text, 800, 200);
+        println!("✅ Created {} chunks", chunks.len());
 
         // (Next steps: chunk & insert into DB…)
     } else {
@@ -25,5 +28,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-mod chunker;
