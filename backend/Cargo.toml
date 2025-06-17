@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 lopdf = "0.26"
+sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-native-tls"] }
+tokio = { version = "1", features = ["full"] }
