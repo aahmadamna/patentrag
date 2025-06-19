@@ -7,3 +7,5 @@ edition = "2024"
 lopdf = "0.26"
 sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-native-tls"] }
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "blocking"] }   # for HTTP calls
+serde = { version = "1", features = ["derive"] }                # for JSON deserialization
