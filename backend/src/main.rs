@@ -1,112 +1,107 @@
-mod ingest;
-mod chunker;
-mod db;
-mod embedder;
+mod api;
 mod search;
 mod rag;
 
-
-use std::env;
+use axum::{
+    routing::{get, post},
+    Router,
+    extract::State,
+    http::StatusCode,
+    response::Json,
+};
 use sqlx::PgPool;
-use ingest::extract_text_from_pdf;
-use chunker::chunk_text;
-use db::save_chunk;
-use embedder::run_embedding_job;
-use search::{run_search, SearchRequest};
-use rag::run_query;
+use redis::aio::Connection;
+use serde_json::json;
+use std::{env, net::SocketAddr, sync::Arc};
+use tokio::sync::Mutex;
+
+use api::{SearchPayload, SearchResult as ApiSearchResult, QueryPayload, QueryResponse};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = env::args().skip(1);
+    // Connect to Postgres
+    let database_url = env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set");
+    let pg_pool = PgPool::connect(&database_url).await?;
 
-    //connect to redis 
+    // Connect to Redis
     let redis_url = env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1/".into());
     let client = redis::Client::open(redis_url)?;
-    let mut redis_conn = client.get_async_connection().await?;
+    let conn = client.get_async_connection().await?;
 
+    // Shared state
+    let shared = Arc::new(AppState {
+        pg_pool,
+        redis: Mutex::new(conn),
+    });
 
-    match args.next().as_deref() {
-        Some("ingest") => {
-            let pdf_path = args.next().expect("Missing PDF path");
-            let patent_id = args.next().expect("Missing patent ID");
+    // Router
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/search", post(handle_search))
+        .route("/query", post(handle_query))
+        .with_state(shared);
 
-            println!("Ingesting PDF '{}' as patent ID '{}'", pdf_path, patent_id);
-
-            // Connect to Postgres
-            let database_url = env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set");
-            let pool = PgPool::connect(&database_url).await?;
-
-            // 1. Extract all text
-            let full_text = extract_text_from_pdf(&pdf_path)?;
-            println!("Extracted {} characters of text", full_text.len());
-
-            // 2. Chunk the text
-            let chunks = chunk_text(&full_text, 800, 200);
-            println!("Created {} chunks", chunks.len());
-
-            // 3. Persist each chunk into the database
-            for (idx, chunk_text) in chunks.iter().enumerate() {
-                let chunk_id = format!("{}-{}", patent_id, idx);
-                save_chunk(&pool, &patent_id, &chunk_id, chunk_text).await?;
-            }
-            println!("Persisted all {} chunks", chunks.len());
-        }
-
-        Some("embed") => {
-            println!("Starting embedding job…");
-
-            // Connect to Postgres
-            let database_url = env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set");
-            let pool = PgPool::connect(&database_url).await?;
-
-            // Run the embedding pipeline
-            run_embedding_job(&pool).await?;
-            println!("Embedding pass complete");
-        }
-
-        Some("search") => {
-            let query = args.next().expect("Usage: patentrag search <query> [top_k]");
-            let top_k = args.next()
-                .and_then(|s| s.parse::<i64>().ok())
-                .unwrap_or(5);
-
-            // Connect to Postgres
-            let database_url = env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set");
-            let pool = PgPool::connect(&database_url).await?;
-
-            // Run the search
-            let results = run_search(&pool, SearchRequest { query, top_k }, &mut redis_conn).await?;
-            for res in results {
-                println!(
-                    "{} | {} | {:.4}\n{}\n---",
-                    res.patent_id, res.chunk_id, res.distance, res.snippet
-                );
-            }
-        }
-
-        Some("query") => {
-            let question = args.next().expect("Usage: patentrag query <question> [top_k]");
-            let top_k    = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
-        
-            let database_url = env::var("DATABASE_URL")?;
-            let pool = PgPool::connect(&database_url).await?;
-        
-            println!("💬 Query: {}", question);
-            let answer = run_query(&pool, &question, top_k, &mut redis_conn).await?;
-            println!("\n💡 Answer:\n{}", answer);
-        }
-
-        _ => {
-            eprintln!("Usage:");
-            eprintln!("  patentrag ingest <pdf_path> <patent_id>");
-            eprintln!("  patentrag embed");
-            eprintln!("  patentrag search <query> [top_k]");
-        }
-    }
+    // Launch
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("🚀 Listening on http://{}", addr);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app.into_make_service()).await?;
 
     Ok(())
+}
+
+async fn root() -> Json<serde_json::Value> {
+    Json(json!({ "status": "ok", "service": "Patentrag API" }))
+}
+
+async fn handle_search(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SearchPayload>,
+) -> Result<Json<Vec<ApiSearchResult>>, StatusCode> {
+    let mut redis_conn = state.redis.lock().await;
+    let results = search::run_search(
+        &state.pg_pool,
+        search::SearchRequest {
+            query: payload.query,
+            top_k: payload.top_k,
+        },
+        &mut *redis_conn,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let api_results = results
+        .into_iter()
+        .map(|r| ApiSearchResult {
+            patent_id: r.patent_id,
+            chunk_id: r.chunk_id,
+            snippet: r.snippet,
+            distance: r.distance,
+        })
+        .collect();
+    Ok(Json(api_results))
+}
+
+async fn handle_query(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<QueryPayload>,
+) -> Result<Json<QueryResponse>, StatusCode> {
+    let mut redis_conn = state.redis.lock().await;
+    let answer = rag::run_query(
+        &state.pg_pool,
+        &payload.question,
+        payload.top_k,
+        &mut *redis_conn,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(QueryResponse { answer }))
+}
+
+struct AppState {
+    pg_pool: PgPool,
+    redis: Mutex<Connection>,
 }
