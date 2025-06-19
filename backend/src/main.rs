@@ -1,10 +1,10 @@
-// backend/src/main.rs
-
 mod ingest;
 mod chunker;
 mod db;
 mod embedder;
 mod search;
+mod rag;
+
 
 use std::env;
 use sqlx::PgPool;
@@ -13,6 +13,7 @@ use chunker::chunk_text;
 use db::save_chunk;
 use embedder::run_embedding_job;
 use search::{run_search, SearchRequest};
+use rag::run_query;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -80,6 +81,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        Some("query") => {
+            let question = args.next().expect("Usage: patentrag query <question> [top_k]");
+            let top_k    = args.next().and_then(|s| s.parse().ok()).unwrap_or(5);
+        
+            let database_url = env::var("DATABASE_URL")?;
+            let pool = PgPool::connect(&database_url).await?;
+        
+            println!("💬 Query: {}", question);
+            let answer = run_query(&pool, &question, top_k).await?;
+            println!("\n💡 Answer:\n{}", answer);
+        }
+        
         _ => {
             eprintln!("Usage:");
             eprintln!("  patentrag ingest <pdf_path> <patent_id>");
