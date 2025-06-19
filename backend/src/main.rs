@@ -19,6 +19,13 @@ use rag::run_query;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
 
+    //connect to redis 
+    let redis_url = env::var("REDIS_URL")
+        .unwrap_or_else(|_| "redis://127.0.0.1/".into());
+    let client = redis::Client::open(redis_url)?;
+    let mut redis_conn = client.get_async_connection().await?;
+
+
     match args.next().as_deref() {
         Some("ingest") => {
             let pdf_path = args.next().expect("Missing PDF path");
@@ -72,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let pool = PgPool::connect(&database_url).await?;
 
             // Run the search
-            let results = run_search(&pool, SearchRequest { query, top_k }).await?;
+            let results = run_search(&pool, SearchRequest { query, top_k }, &mut redis_conn).await?;
             for res in results {
                 println!(
                     "{} | {} | {:.4}\n{}\n---",
@@ -89,10 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let pool = PgPool::connect(&database_url).await?;
         
             println!("💬 Query: {}", question);
-            let answer = run_query(&pool, &question, top_k).await?;
+            let answer = run_query(&pool, &question, top_k, &mut redis_conn).await?;
             println!("\n💡 Answer:\n{}", answer);
         }
-        
+
         _ => {
             eprintln!("Usage:");
             eprintln!("  patentrag ingest <pdf_path> <patent_id>");

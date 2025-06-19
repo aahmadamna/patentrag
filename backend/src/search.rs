@@ -1,9 +1,16 @@
 // backend/src/search.rs
 
+use std::error::Error;
+use std::env;
+
+use redis::aio::Connection;
+use redis::AsyncCommands;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use hex;
+
 use sqlx::{PgPool, Row};
-use std::env;
 
 /// Structure of the OpenAI embedding response
 #[derive(Deserialize)]
@@ -31,15 +38,30 @@ pub struct SearchResult {
     pub distance: f64,
 }
 
-/// Call OpenAI to embed the user query text
-async fn embed_query(text: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+/// Embed the user query text, using Redis to cache embeddings
+async fn embed_query(
+    text: &str,
+    redis_conn: &mut Connection,
+) -> Result<Vec<f32>, Box<dyn Error>> {
+    // 1) Compute cache key
+    let mut hasher = Sha256::new();
+    hasher.update(text.as_bytes());
+    let hash = hex::encode(hasher.finalize());
+    let cache_key = format!("embed:{}", hash);
+
+    // 2) Try to fetch from Redis
+    if let Ok(cached_json) = redis_conn.get::<_, String>(cache_key.clone()).await {
+        let vec: Vec<f32> = serde_json::from_str(&cached_json)?;
+        return Ok(vec);
+    }
+
+    // 3) Call OpenAI embeddings API
     let api_key = env::var("OPENAI_API_KEY")?;
     let client = Client::new();
     let body = serde_json::json!({
         "input": text,
         "model": "text-embedding-ada-002"
     });
-
     let resp = client
         .post("https://api.openai.com/v1/embeddings")
         .bearer_auth(api_key)
@@ -48,21 +70,32 @@ async fn embed_query(text: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>>
         .await?
         .json::<EmbeddingResponse>()
         .await?;
-
-    Ok(resp.data
+    let embedding = resp.data
         .into_iter()
         .next()
-        .expect("Expected at least one embedding")
-        .embedding)
+        .ok_or("No embedding returned")?
+        .embedding;
+
+    // 4) Cache the result for 24h
+    let serialized = serde_json::to_string(&embedding)?;
+    let ttl_seconds = 86_400;
+    redis_conn
+    .set_ex::<String, String, ()>(cache_key, serialized, ttl_seconds)
+    .await?;
+
+
+    // 5) Return the embedding
+    Ok(embedding)
 }
 
 /// Run a nearest-neighbor search in Postgres using pgvector
 pub async fn run_search(
     pool: &PgPool,
     req: SearchRequest,
-) -> Result<Vec<SearchResult>, Box<dyn std::error::Error>> {
-    // 1) Embed the query
-    let q_emb = embed_query(&req.query).await?;
+    redis_conn: &mut Connection,
+) -> Result<Vec<SearchResult>, Box<dyn Error>> {
+    // 1) Embed the query (with caching)
+    let q_emb = embed_query(&req.query, redis_conn).await?;
 
     // 2) Execute a vector distance search, binding the Vec<f32> directly
     let rows = sqlx::query(
@@ -74,8 +107,8 @@ pub async fn run_search(
         LIMIT $2
         "#,
     )
-    .bind(&q_emb)         // bind the query embedding
-    .bind(req.top_k)      // bind the limit
+    .bind(&q_emb)
+    .bind(req.top_k)
     .fetch_all(pool)
     .await?;
 
