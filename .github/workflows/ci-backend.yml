@@ -1,3 +1,5 @@
+# .github/workflows/backend-ci.yml
+
 name: Backend CI
 
 on:
@@ -12,6 +14,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Make sure SQLx macros and your code see these at compile time
+    env:
+      DATABASE_URL: postgres://pguser:pgpass@localhost:5432/patentrag
+      REDIS_URL: redis://127.0.0.1:6379/
+      OPENAI_API_KEY: ci_dummy_key
+
     services:
       postgres:
         image: postgres:14
@@ -21,7 +29,6 @@ jobs:
           POSTGRES_USER: pguser
           POSTGRES_PASSWORD: pgpass
           POSTGRES_DB: patentrag
-        # wait until Postgres is ready
         options: >-
           --health-cmd "pg_isready -U pguser"
           --health-interval 5s
@@ -32,20 +39,15 @@ jobs:
         image: redis:7
         ports:
           - 6379:6379
-        # wait until Redis is ready
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 2s
           --health-retries 5
 
-    env:
-      DATABASE_URL: postgres://pguser:pgpass@localhost:5432/patentrag
-      REDIS_URL: redis://127.0.0.1:6379/
-      OPENAI_API_KEY: ci_dummy_key
-
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out code
+        uses: actions/checkout@v3
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -56,7 +58,20 @@ jobs:
       - name: Wait for services to be healthy
         run: sleep 10
 
-      - name: Verify build and tests
+      - name: Run database migrations
+        run: |
+          cd backend
+          # if you have SQLx migrations:
+          cargo install sqlx-cli --no-default-features --features postgres
+          sqlx database create
+          sqlx migrate run
+
+      - name: Verify build
+        run: |
+          cd backend
+          cargo check --locked --verbose
+
+      - name: Run tests
         run: |
           cd backend
           cargo test --locked --verbose
