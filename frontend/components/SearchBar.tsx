@@ -9,7 +9,7 @@ interface Props {
   loading?: boolean;
 }
 
-export const SearchBar = ({ onSearch, loading }: Props) => {
+export function SearchBar({ onSearch, loading }: Props) {
   const [input, setInput] = useState("");
 
   const handleSubmit = () => {
@@ -28,4 +28,4 @@ export const SearchBar = ({ onSearch, loading }: Props) => {
       </Button>
     </div>
   );
-};
+}
