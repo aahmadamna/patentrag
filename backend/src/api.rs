@@ -5,6 +5,7 @@ pub struct SearchPayload {
     pub query: String,
     #[serde(default = "default_top_k")]
     pub top_k: i64,
+    pub patent_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -20,6 +21,7 @@ pub struct QueryPayload {
     pub question: String,
     #[serde(default = "default_top_k")]
     pub top_k: i64,
+    pub patent_id: Option<String>,
 }
 
 #[derive(Serialize)]

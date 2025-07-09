@@ -2,6 +2,7 @@ use std::error::Error;
 use std::env;
 
 use redis::aio::Connection;
+use redis::AsyncCommands;
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
@@ -20,12 +21,13 @@ pub async fn run_query(
     pool: &PgPool,
     question: &str,
     top_k: i64,
-    redis_conn: &mut Connection,      // <- take Redis conn
+    redis_conn: &mut Connection,
+    patent_id: Option<String>,
 ) -> Result<String, Box<dyn Error>> {
     // 1) Retrieve the top-K chunks via your existing cached run_search
     let results: Vec<SearchResult> = run_search(
         pool,
-        SearchRequest { query: question.to_string(), top_k },
+        SearchRequest { query: question.to_string(), top_k, patent_id },
         redis_conn,                     
     )
     .await?;
@@ -66,7 +68,7 @@ pub async fn run_query(
     let body = serde_json::json!({
         "model": "gpt-4o-mini",
         "messages": [
-            { "role": "system", "content": "You’re a precise, citation-driven patent assistant." },
+            { "role": "system", "content": "You're a precise, citation-driven patent assistant." },
             { "role": "user",   "content": prompt }
         ]
     });

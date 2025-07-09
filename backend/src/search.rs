@@ -27,6 +27,7 @@ struct EmbeddingResponse {
 pub struct SearchRequest {
     pub query: String,
     pub top_k: i64,
+    pub patent_id: Option<String>,
 }
 
 /// One search result entry
@@ -88,32 +89,47 @@ async fn embed_query(
     Ok(embedding)
 }
 
-/// Run a nearest-neighbor search in Postgres using pgvector
-pub async fn run_search(
+/// Run a keyword-based search in Postgres as a fallback
+async fn run_keyword_search(
     pool: &PgPool,
-    req: SearchRequest,
-    redis_conn: &mut Connection,
+    req: &SearchRequest,
 ) -> Result<Vec<SearchResult>, Box<dyn Error>> {
-    // 1) Embed the query (with caching)
-    let q_emb = embed_query(&req.query, redis_conn).await?;
+    println!("🔍 Falling back to keyword search for: '{}'", req.query);
+    
+    let rows = if let Some(ref patent_id) = req.patent_id {
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet, 0.0 AS distance
+            FROM chunks
+            WHERE patent_id = $1 AND text ILIKE $2
+            ORDER BY chunk_id
+            LIMIT $3
+            "#,
+        )
+        .bind(patent_id)
+        .bind(&format!("%{}%", req.query))
+        .bind(req.top_k)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet, 0.0 AS distance
+            FROM chunks
+            WHERE text ILIKE $1
+            ORDER BY chunk_id
+            LIMIT $2
+            "#,
+        )
+        .bind(&format!("%{}%", req.query))
+        .bind(req.top_k)
+        .fetch_all(pool)
+        .await?
+    };
 
-    // 2) Execute a vector distance search, binding the Vec<f32> directly
-    let rows = sqlx::query(
-        r#"
-        SELECT patent_id, chunk_id, text AS snippet,
-               embedding <-> ($1::vector) AS distance
-        FROM chunks
-        ORDER BY embedding <-> ($1::vector)
-        LIMIT $2
-        "#,
-    )
-    .bind(&q_emb)
-    .bind(req.top_k)
-    .fetch_all(pool)
-    .await?;
+    println!("📊 Found {} rows from keyword search", rows.len());
 
-    // 3) Map each row into our SearchResult struct
-    let results = rows
+    let results: Vec<SearchResult> = rows
         .into_iter()
         .map(|row| SearchResult {
             patent_id: row.get("patent_id"),
@@ -123,5 +139,78 @@ pub async fn run_search(
         })
         .collect();
 
+    println!("✅ Returning {} keyword search results", results.len());
+    Ok(results)
+}
+
+/// Run a nearest-neighbor search in Postgres using pgvector
+pub async fn run_search(
+    pool: &PgPool,
+    req: SearchRequest,
+    redis_conn: &mut Connection,
+) -> Result<Vec<SearchResult>, Box<dyn Error>> {
+    println!("🔍 Starting search for query: '{}'", req.query);
+    println!("🔍 Patent ID: {:?}, Top K: {}", req.patent_id, req.top_k);
+    
+    // 1) Embed the query (with caching)
+    let q_emb = embed_query(&req.query, redis_conn).await?;
+    println!("✅ Query embedded successfully, embedding length: {}", q_emb.len());
+
+    // 2) Execute a vector distance search, binding the Vec<f32> directly
+    let rows = if let Some(ref patent_id) = req.patent_id {
+        println!("🔍 Searching for patent_id: {}", patent_id);
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet,
+                   embedding <-> ($1::vector) AS distance
+            FROM chunks
+            WHERE patent_id = $2 AND embedding IS NOT NULL
+            ORDER BY embedding <-> ($1::vector)
+            LIMIT $3
+            "#,
+        )
+        .bind(&q_emb)
+        .bind(patent_id)
+        .bind(req.top_k)
+        .fetch_all(pool)
+        .await?
+    } else {
+        println!("🔍 Searching across all patents");
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet,
+                   embedding <-> ($1::vector) AS distance
+            FROM chunks
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <-> ($1::vector)
+            LIMIT $2
+            "#,
+        )
+        .bind(&q_emb)
+        .bind(req.top_k)
+        .fetch_all(pool)
+        .await?
+    };
+
+    println!("📊 Found {} rows from vector search", rows.len());
+
+    // 3) Map each row into our SearchResult struct
+    let mut results = rows
+        .into_iter()
+        .map(|row| SearchResult {
+            patent_id: row.get("patent_id"),
+            chunk_id: row.get("chunk_id"),
+            snippet: row.get("snippet"),
+            distance: row.get("distance"),
+        })
+        .collect::<Vec<_>>();
+
+    // 4) If vector search returned no results, try keyword search as fallback
+    if results.is_empty() {
+        println!("⚠️  No results from vector search, trying keyword search...");
+        results = run_keyword_search(pool, &req).await?;
+    }
+
+    println!("✅ Returning {} search results", results.len());
     Ok(results)
 }
