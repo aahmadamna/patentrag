@@ -27,7 +27,12 @@ pub async fn run_query(
     // 1) Retrieve the top-K chunks via your existing cached run_search
     let results: Vec<SearchResult> = run_search(
         pool,
-        SearchRequest { query: question.to_string(), top_k, patent_id },
+        SearchRequest { 
+            query: question.to_string(), 
+            top_k, 
+            patent_id,
+            search_mode: "semantic".to_string(),
+        },
         redis_conn,                     
     )
     .await?;

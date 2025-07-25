@@ -28,6 +28,7 @@ pub struct SearchRequest {
     pub query: String,
     pub top_k: i64,
     pub patent_id: Option<String>,
+    pub search_mode: String,
 }
 
 /// One search result entry
@@ -93,43 +94,47 @@ async fn embed_query(
 async fn run_keyword_search(
     pool: &PgPool,
     req: &SearchRequest,
+    redis_conn: &mut Connection,
 ) -> Result<Vec<SearchResult>, Box<dyn Error>> {
-    println!("🔍 Falling back to keyword search for: '{}'", req.query);
-    
+    println!("🔍 Hybrid keyword search for: '{}'", req.query);
+    let top_k = req.top_k as usize;
+    let keyword = req.query.trim();
+    if keyword.is_empty() {
+        return Ok(vec![]);
+    }
+    // 1. Exact keyword match (whole word, case-insensitive)
+    let pattern = format!(r"\y{}\y", regex::escape(keyword));
     let rows = if let Some(ref patent_id) = req.patent_id {
         sqlx::query(
             r#"
-            SELECT patent_id, chunk_id, text AS snippet, 0.0 AS distance
+            SELECT patent_id, chunk_id, text AS snippet, 0.0::float8 AS distance
             FROM chunks
-            WHERE patent_id = $1 AND text ILIKE $2
+            WHERE patent_id = $1 AND text ~* $2
             ORDER BY chunk_id
             LIMIT $3
             "#,
         )
         .bind(patent_id)
-        .bind(&format!("%{}%", req.query))
-        .bind(req.top_k)
+        .bind(&pattern)
+        .bind(top_k as i64)
         .fetch_all(pool)
         .await?
     } else {
         sqlx::query(
             r#"
-            SELECT patent_id, chunk_id, text AS snippet, 0.0 AS distance
+            SELECT patent_id, chunk_id, text AS snippet, 0.0::float8 AS distance
             FROM chunks
-            WHERE text ILIKE $1
+            WHERE text ~* $1
             ORDER BY chunk_id
             LIMIT $2
             "#,
         )
-        .bind(&format!("%{}%", req.query))
-        .bind(req.top_k)
+        .bind(&pattern)
+        .bind(top_k as i64)
         .fetch_all(pool)
         .await?
     };
-
-    println!("📊 Found {} rows from keyword search", rows.len());
-
-    let results: Vec<SearchResult> = rows
+    let mut results: Vec<SearchResult> = rows
         .into_iter()
         .map(|row| SearchResult {
             patent_id: row.get("patent_id"),
@@ -138,9 +143,68 @@ async fn run_keyword_search(
             distance: row.get("distance"),
         })
         .collect();
-
-    println!("✅ Returning {} keyword search results", results.len());
+    let seen = results.iter().map(|r| r.chunk_id.clone()).collect::<std::collections::HashSet<_>>();
+    // 2. If not enough, fill with semantic/vector search
+    if results.len() < top_k {
+        let needed = top_k - results.len();
+        let mut semantic_results = run_semantic_search(pool, req, redis_conn, needed).await?;
+        semantic_results.retain(|r| !seen.contains(&r.chunk_id));
+        results.extend(semantic_results);
+    }
+    results.truncate(top_k);
+    println!("✅ Returning {} hybrid keyword search results", results.len());
     Ok(results)
+}
+
+// Helper: semantic search for keyword mode (vector search, but don't fallback to keyword)
+async fn run_semantic_search(
+    pool: &PgPool,
+    req: &SearchRequest,
+    redis_conn: &mut Connection,
+    limit: usize,
+) -> Result<Vec<SearchResult>, Box<dyn Error>> {
+    let q_emb = embed_query(&req.query, redis_conn).await?;
+    let rows = if let Some(ref patent_id) = req.patent_id {
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet,
+                   (embedding <-> ($1::vector))::float8 AS distance
+            FROM chunks
+            WHERE patent_id = $2 AND embedding IS NOT NULL
+            ORDER BY embedding <-> ($1::vector)
+            LIMIT $3
+            "#,
+        )
+        .bind(&q_emb)
+        .bind(patent_id)
+        .bind(limit as i64)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query(
+            r#"
+            SELECT patent_id, chunk_id, text AS snippet,
+                   (embedding <-> ($1::vector))::float8 AS distance
+            FROM chunks
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <-> ($1::vector)
+            LIMIT $2
+            "#,
+        )
+        .bind(&q_emb)
+        .bind(limit as i64)
+        .fetch_all(pool)
+        .await?
+    };
+    Ok(rows
+        .into_iter()
+        .map(|row| SearchResult {
+            patent_id: row.get("patent_id"),
+            chunk_id: row.get("chunk_id"),
+            snippet: row.get("snippet"),
+            distance: row.get("distance"),
+        })
+        .collect())
 }
 
 /// Run a nearest-neighbor search in Postgres using pgvector
@@ -150,8 +214,14 @@ pub async fn run_search(
     redis_conn: &mut Connection,
 ) -> Result<Vec<SearchResult>, Box<dyn Error>> {
     println!("🔍 Starting search for query: '{}'", req.query);
-    println!("🔍 Patent ID: {:?}, Top K: {}", req.patent_id, req.top_k);
+    println!("🔍 Patent ID: {:?}, Top K: {}, Mode: {}", req.patent_id, req.top_k, req.search_mode);
     
+    // If keyword mode, use hybrid keyword search
+    if req.search_mode == "keyword" {
+        return run_keyword_search(pool, &req, redis_conn).await;
+    }
+    
+    // Otherwise, use semantic search (existing logic)
     // 1) Embed the query (with caching)
     let q_emb = embed_query(&req.query, redis_conn).await?;
     println!("✅ Query embedded successfully, embedding length: {}", q_emb.len());
@@ -162,7 +232,7 @@ pub async fn run_search(
         sqlx::query(
             r#"
             SELECT patent_id, chunk_id, text AS snippet,
-                   embedding <-> ($1::vector) AS distance
+                   (embedding <-> ($1::vector))::float8 AS distance
             FROM chunks
             WHERE patent_id = $2 AND embedding IS NOT NULL
             ORDER BY embedding <-> ($1::vector)
@@ -179,7 +249,7 @@ pub async fn run_search(
         sqlx::query(
             r#"
             SELECT patent_id, chunk_id, text AS snippet,
-                   embedding <-> ($1::vector) AS distance
+                   (embedding <-> ($1::vector))::float8 AS distance
             FROM chunks
             WHERE embedding IS NOT NULL
             ORDER BY embedding <-> ($1::vector)
@@ -208,7 +278,7 @@ pub async fn run_search(
     // 4) If vector search returned no results, try keyword search as fallback
     if results.is_empty() {
         println!("⚠️  No results from vector search, trying keyword search...");
-        results = run_keyword_search(pool, &req).await?;
+        results = run_keyword_search(pool, &req, redis_conn).await?;
     }
 
     println!("✅ Returning {} search results", results.len());
