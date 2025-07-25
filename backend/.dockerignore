@@ -1,0 +1,6 @@
+target/
+Cargo.lock
+data/
+*.pdf
+*.txt
+dump.rdb 

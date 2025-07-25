@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 
+// Helper function to get API URL
+const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface SearchResult {
   patent_id: string;
   chunk_id: string;
@@ -169,7 +172,7 @@ export default function Home() {
 
   const loadChats = async () => {
     try {
-      const res = await fetch('http://localhost:8000/chats');
+      const res = await fetch(`${getApiUrl()}/chats`);
       if (res.ok) {
         const data = await res.json();
         setChats(data);
@@ -181,7 +184,7 @@ export default function Home() {
 
   const loadMessages = async (chatId: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/chats/${chatId}/messages`);
+      const res = await fetch(`${getApiUrl()}/chats/${chatId}/messages`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -195,7 +198,7 @@ export default function Home() {
     setLoading(true);
     try {
       const chatTitle = uploadedFileName ? uploadedFileName.replace('.pdf', '') : `Chat ${chats.length + 1}`;
-      const res = await fetch('http://localhost:8000/chats', {
+      const res = await fetch(`${getApiUrl()}/chats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: chatTitle }),
@@ -222,7 +225,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('http://localhost:8000/upload_pdf', {
+      const res = await fetch(`${getApiUrl()}/upload_pdf`, {
         method: 'POST',
         body: formData,
       });
@@ -246,7 +249,7 @@ export default function Home() {
     if (!currentChatId) return;
     
     try {
-      const res = await fetch(`http://localhost:8000/chats/${currentChatId}/messages`, {
+      const res = await fetch(`${getApiUrl()}/chats/${currentChatId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender, content, msg_type: msgType }),
@@ -274,7 +277,7 @@ export default function Home() {
     await saveMessage('user', input, searchMode === 'ask' ? 'question' : 'search');
     
     try {
-      const endpoint = searchMode === 'ask' ? 'http://localhost:8000/query' : 'http://localhost:8000/search';
+      const endpoint = searchMode === 'ask' ? `${getApiUrl()}/query` : `${getApiUrl()}/search`;
       const payload = searchMode === 'ask'
         ? { question: input, patent_id: patentId }
         : { query: input, patent_id: patentId, search_mode: 'keyword' };
@@ -309,7 +312,7 @@ export default function Home() {
 
   const handleDeleteChat = async (chatId: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/chats/${chatId}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiUrl()}/chats/${chatId}`, { method: 'DELETE' });
       if (res.ok) {
         setChats(chats => chats.filter(chat => chat.id !== chatId));
         if (currentChatId === chatId) {
@@ -330,7 +333,7 @@ export default function Home() {
     
     setSummaryLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/query', {
+      const res = await fetch(`${getApiUrl()}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -354,7 +357,7 @@ export default function Home() {
     
     setRelatedDocsLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/related-documents/${patentId}`);
+      const res = await fetch(`${getApiUrl()}/related-documents/${patentId}`);
       if (res.ok) {
         const data = await res.json();
         setRelatedDocs(data);
@@ -372,7 +375,7 @@ export default function Home() {
     if (!patentId || !summary || !uploadedFileName) return;
     
     try {
-      const res = await fetch('http://localhost:8000/download-summary-pdf', {
+      const res = await fetch(`${getApiUrl()}/download-summary-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
