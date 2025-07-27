@@ -35,4 +35,4 @@ RUN chmod +x backend/target/release/backend
 EXPOSE 8000
 
 # 🚀 Start the app
-CMD ["./backend/target/release/backend"]
+CMD ["./backend/target/release/patentrag"]
