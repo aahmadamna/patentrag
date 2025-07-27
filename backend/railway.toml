@@ -2,11 +2,14 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cargo run --release"
+startCommand = "./start.sh"
 healthcheckPath = "/"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [phases.setup]
-nixPkgs = ["poppler_utils", "tesseract", "tesseract-data-eng"] 
+nixPkgs = ["openssl", "pkg-config"]
+
+[phases.build]
+cmds = ["cargo build --release"] 
