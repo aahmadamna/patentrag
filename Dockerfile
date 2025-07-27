@@ -26,4 +26,4 @@ RUN cd backend && cargo build --release
 EXPOSE 8000
 
 # Run the binary (change if needed)
-CMD ["./backend/target/release/patentrag"]
+CMD ["./backend/target/release"]
