@@ -29,4 +29,5 @@ RUN chmod +x backend/target/release/backend
 EXPOSE 8000
 
 # ✅ Run the binary
-CMD ["./backend/target/release/backend"]
+RUN chmod +x backend/target/release/patentrag
+CMD ["./backend/target/release/patentrag"]
