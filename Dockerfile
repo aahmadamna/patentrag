@@ -32,5 +32,5 @@ RUN chmod +x backend/target/release/backend
 # 🌐 Expose the port your app listens on
 EXPOSE 8000
 
-# 🚀 Start the app
-CMD ["./backend/target/release/backend"]
+# ✅ Temporarily output contents of release folder and don't run app yet
+CMD ["sh", "-c", "ls -lh backend/target/release && echo 'Done listing' && sleep 3600"]
