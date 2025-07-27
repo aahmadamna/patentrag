@@ -24,15 +24,13 @@ RUN cd backend && cargo build --release || true
 # --- 💻 Copy full source and rebuild ---
 COPY backend ./backend
 RUN cd backend && cargo build --release
-
-# ✅ Debug: List the contents of the target directory to verify binary name
 RUN ls -lh backend/target/release
 
 # ✅ Make sure binary is executable (and named correctly)
-RUN chmod +x backend/target/release/patentrag
+RUN chmod +x backend/target/release/backend
 
 # 🌐 Expose the port your app listens on
 EXPOSE 8000
 
 # 🚀 Start the app
-CMD ["./backend/target/release/patentrag"]
+CMD ["./backend/target/release/backend"]
