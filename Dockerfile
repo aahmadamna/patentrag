@@ -3,7 +3,8 @@ FROM rust:slim
 
 # --- 🔧 Allow DATABASE_URL to be passed at build time ---
 ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
+ENV DATABASE_URL=postgresql://postgres:PgKXMHuLveRLYMhrTrYtoTVnLZfemARG@postgres.railway.internal:5432/railway
+
 
 # --- 📦 Install system dependencies (for openssl etc) ---
 RUN apt-get update && \
