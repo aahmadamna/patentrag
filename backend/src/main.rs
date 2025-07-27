@@ -30,8 +30,10 @@ use axum::extract::Path;
 
 use api::{SearchPayload, SearchResult as ApiSearchResult, QueryPayload, QueryResponse, ChatSummary, Message, CreateChatRequest, AddMessageRequest};
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🚀 Patentrag backend starting...");
     // Connect to Postgres
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
