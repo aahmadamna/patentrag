@@ -1,7 +1,7 @@
-# Use latest Rust image
+# Use the latest stable Rust image
 FROM rust:slim
 
-# Install system dependencies (OpenSSL and pkg-config)
+# Install system dependencies required for building OpenSSL and other crates
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev build-essential ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
@@ -9,21 +9,24 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /app
 
-# Copy manifest files
+# Copy only Cargo manifest files to cache dependencies
 COPY backend/Cargo.toml backend/Cargo.lock ./backend/
 
-# Create dummy main.rs to warm up build cache
+# Create dummy main.rs to build and cache dependencies
 RUN mkdir -p backend/src && echo "fn main() {}" > backend/src/main.rs
 RUN cd backend && cargo build --release || true
 
-# Copy full source
+# Copy actual source code
 COPY backend ./backend
 
-# Build real application
+# Build the full app
 RUN cd backend && cargo build --release
 
-# Expose the port your app uses
+# ✅ Make sure the binary is executable
+RUN chmod +x backend/target/release/backend
+
+# Expose the port your app listens on (update if not 8000)
 EXPOSE 8000
 
-# Run the binary (change if needed)
-CMD ["./backend/target/release"]
+# ✅ Run the binary
+CMD ["./backend/target/release/backend"]
