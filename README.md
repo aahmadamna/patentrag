@@ -1,9 +1,83 @@
-# patentrag
-A Retrieval-Augmented Patent Q&amp;A &amp; Summarization Engine with Cache-Augmented Generation
-PatentRAG+CAG is an AI-powered patent intelligence assistant that transforms days of manual prior-art hunting, infringement analysis, and freedom-to-operate (FTO) scanning into a few clicks. It combines:
+# PatentRAG
 
-RAG (Retrieval-Augmented Generation): Users pose natural-language questions (“What prior art anticipates Claim 4?”, “Does this spec infringe Claim 2?”, “Which patents block my new design?”). The system retrieves the most semantically relevant passages from a large patent corpus and then invokes an LLM to generate concise, citation-backed answers, formatted as 102/103 charts, infringement evidence tables, or ranked FTO blocker lists.
+A Retrieval-Augmented Patent Q&A & Summarization Engine with Cache-Augmented Generation
 
-CAG (Cache-Augmented Generation): Intermediate results—query embeddings, search outputs, full AI responses—are cached so any repeat or near-duplicate query runs in milliseconds, dramatically cutting latency and API costs.
+PatentRAG+CAG is an AI-powered patent intelligence assistant that transforms days of manual prior-art hunting, infringement analysis, and freedom-to-operate (FTO) scanning into a few clicks.
 
-Executive Summaries: One-click, three-bullet overviews of any patent (problem, novelty, key claims), exportable to Markdown or PDF for briefs and presentations.
+## Features
+
+- **RAG (Retrieval-Augmented Generation)**: Natural language questions about patents
+- **CAG (Cache-Augmented Generation)**: Cached results for faster responses
+- **Executive Summaries**: One-click patent overviews
+- **PDF Upload & Processing**: Upload and analyze patent PDFs
+- **Chat History**: Save and manage conversations
+
+## Local Development Setup
+
+### Prerequisites
+
+- Rust (for backend)
+- Node.js (for frontend)
+- PostgreSQL
+- Redis
+- OpenAI API key
+
+### Backend Setup
+
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+
+2. Install dependencies:
+   ```bash
+   cargo build
+   ```
+
+3. Set environment variables:
+   ```bash
+   export DATABASE_URL="postgresql://username:password@localhost:5432/patentrag"
+   export REDIS_URL="redis://localhost:6379"
+   export OPENAI_API_KEY="your_openai_api_key"
+   ```
+
+4. Run the backend:
+   ```bash
+   cargo run
+   ```
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set environment variables:
+   ```bash
+   export NEXT_PUBLIC_API_URL="http://localhost:8000"
+   ```
+
+4. Run the frontend:
+   ```bash
+   npm run dev
+   ```
+
+### Database Setup
+
+1. Create a PostgreSQL database named `patentrag`
+2. Run the SQL files in the `data/` directory to set up the schema
+3. Start Redis server
+
+## Usage
+
+1. Start both backend and frontend servers
+2. Open http://localhost:3000 in your browser
+3. Upload a patent PDF
+4. Ask questions about the patent
+5. View chat history and summaries
