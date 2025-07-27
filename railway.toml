@@ -2,8 +2,14 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "cd backend && cargo run --release"
+startCommand = "cd backend && ./target/release/backend"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10 
+restartPolicyMaxRetries = 10
+
+[phases.setup]
+nixPkgs = ["openssl", "pkg-config"]
+
+[phases.build]
+cmds = ["cd backend && cargo build --release"] 
