@@ -1,5 +1,5 @@
 # Use official Rust image
-FROM rust:1.72-slim
+FROM rust:slim
 
 # Set working directory inside container
 WORKDIR /app
