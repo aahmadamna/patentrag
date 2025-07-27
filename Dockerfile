@@ -29,7 +29,7 @@ RUN cd backend && cargo build --release
 RUN ls -lh backend/target/release
 
 # ✅ Make sure binary is executable (and named correctly)
-RUN chmod +x backend/target/release/backend
+RUN chmod +x backend/target/release/patentrag
 
 # 🌐 Expose the port your app listens on
 EXPOSE 8000
