@@ -25,6 +25,9 @@ RUN cd backend && cargo build --release || true
 COPY backend ./backend
 RUN cd backend && cargo build --release
 
+# ✅ Debug: List the contents of the target directory to verify binary name
+RUN ls -lh backend/target/release
+
 # ✅ Make sure binary is executable (and named correctly)
 RUN chmod +x backend/target/release/backend
 
