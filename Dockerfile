@@ -1,36 +1,37 @@
 # Use a minimal Rust image
-FROM rust:slim
+FROM rust:slim AS builder
 
-# --- 🔧 Allow DATABASE_URL to be passed at build time ---
-ARG DATABASE_URL
-ENV DATABASE_URL=postgresql://postgres:PgKXMHuLveRLYMhrTrYtoTVnLZfemARG@postgres.railway.internal:5432/railway
-
-
-# --- 📦 Install system dependencies (for openssl etc) ---
+# Install build dependencies
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev build-essential ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
-# --- 📁 Set working directory ---
+# Set working directory
 WORKDIR /app
 
-# --- 🧠 Cache dependencies first ---
+# Copy manifests and cache deps
 COPY backend/Cargo.toml backend/Cargo.lock ./backend/
-
-# Create dummy main.rs to cache dependencies
 RUN mkdir -p backend/src && echo "fn main() {}" > backend/src/main.rs
 RUN cd backend && cargo build --release || true
 
-# --- 💻 Copy full source and rebuild ---
+# Copy full source and build
 COPY backend ./backend
 RUN cd backend && cargo build --release
-RUN ls -lh backend/target/release
 
-# ✅ Make sure binary is executable (and named correctly)
-RUN chmod +x backend/target/release/backend
+# Final stage: runtime
+FROM debian:bookworm-slim
 
-# 🌐 Expose the port your app listens on
+# Install runtime deps
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder stage
+COPY --from=builder /app/backend/target/release/backend /app/backend
+RUN chmod +x /app/backend
+
 EXPOSE 8000
 
-# ✅ Actually run your Rust app
-CMD ["./backend/target/release/backend"]
+# Run app
+CMD ["./backend"]
