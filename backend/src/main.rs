@@ -23,7 +23,7 @@ use std::{env, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use axum_extra::extract::Multipart;
 use std::fs::File as StdFile;
-use std::io::Write;
+use std::io::{self, Write};
 use uuid::Uuid;
 use tower_http::cors::{CorsLayer, Any};
 use axum::extract::Path;
@@ -77,7 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("PORT must be a valid u16");
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("✅ Axum server is about to start...");
-    axum::Server::bind(&addr).serve(app.into_make_service()).await?;
+    io::stdout().flush().unwrap();
+    println!("Listening on http://{}", addr);
+    io::stdout().flush().unwrap();
+    
+    axum::Server::bind(&addr)
+    .serve(app.into_make_service())
+    .await?;
     Ok(())
 }
 
