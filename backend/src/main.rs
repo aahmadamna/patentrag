@@ -75,17 +75,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .unwrap_or_else(|_| "8000".to_string())
     .parse::<u16>()
     .expect("PORT must be a valid u16");
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    println!("✅ Axum server is about to start...");
-    io::stdout().flush().unwrap();
-    println!("Listening on http://{}", addr);
-    io::stdout().flush().unwrap();
-    
-    axum::Server::bind(&addr)
-    .serve(app.into_make_service())
-    .await?;
-    Ok(())
-}
+let addr = SocketAddr::from(([0, 0, 0, 0], port));
+println!("✅ Axum server is about to start...");
+io::stdout().flush().unwrap();
+println!("Listening on http://{}", addr);
+io::stdout().flush().unwrap();
+
+let listener = tokio::net::TcpListener::bind(addr).await?;
+axum::serve(listener, app).await?;
+Ok(())
 
 async fn root() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "service": "Patentrag API" }))

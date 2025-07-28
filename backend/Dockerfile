@@ -5,9 +5,6 @@
     ARG DATABASE_URL
     ENV DATABASE_URL=${DATABASE_URL}
     
-    # Optional: for offline builds (if you ever use sqlx prepare)
-    # ENV SQLX_OFFLINE=true
-    
     # Install build dependencies
     RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config libssl-dev build-essential ca-certificates curl \
@@ -33,8 +30,8 @@
     COPY --from=builder /app/target/release/backend .
     COPY --from=builder /etc/ssl/certs /etc/ssl/certs
     
-    ENV PORT=8000
-    EXPOSE 8000
+    # Remove these lines - let Railway set the PORT
+    # ENV PORT=8000
+    # EXPOSE 8000
     
     CMD ["./backend"]
-    
