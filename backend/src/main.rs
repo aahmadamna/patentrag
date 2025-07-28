@@ -76,9 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .parse::<u16>()
     .expect("PORT must be a valid u16");
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    println!("🚀 Listening on http://{}", addr);
+    println!("✅ Axum server is about to start...");
     axum::Server::bind(&addr).serve(app.into_make_service()).await?;
-
     Ok(())
 }
 

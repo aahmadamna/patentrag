@@ -32,5 +32,6 @@
     ENV PORT=8000
     EXPOSE 8000
     
-    CMD ["./backend"]
+    CMD ["sh", "-c", "ls -l /app && ./backend"]
+
     
