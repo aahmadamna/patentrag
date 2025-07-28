@@ -12,13 +12,18 @@
     
     WORKDIR /app
     
-    # Caching dependencies
+    # Copy Cargo files first for dependency caching
     COPY Cargo.toml Cargo.lock ./
-    RUN mkdir -p src && echo "fn main() {}" > src/main.rs
-    RUN cargo build --release || true
     
-    # Copy full source and build again
-    COPY . .
+    # Create a dummy main.rs and build dependencies only
+    RUN mkdir src && echo "fn main() {}" > src/main.rs
+    RUN cargo build --release
+    RUN rm src/main.rs
+    
+    # Now copy your actual source code
+    COPY src ./src
+    
+    # Build the real application
     RUN cargo build --release
     
     # --- Runtime Stage ---
@@ -29,9 +34,5 @@
     # Copy binary and certs
     COPY --from=builder /app/target/release/backend .
     COPY --from=builder /etc/ssl/certs /etc/ssl/certs
-    
-    # Remove these lines - let Railway set the PORT
-    # ENV PORT=8000
-    # EXPOSE 8000
     
     CMD ["./backend"]
