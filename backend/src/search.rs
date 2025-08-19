@@ -96,7 +96,7 @@ async fn run_keyword_search(
     req: &SearchRequest,
     redis_conn: &mut Connection,
 ) -> Result<Vec<SearchResult>, Box<dyn Error>> {
-    println!("🔍 Hybrid keyword search for: '{}'", req.query);
+            println!("Hybrid keyword search for: '{}'", req.query);
     let top_k = req.top_k as usize;
     let keyword = req.query.trim();
     if keyword.is_empty() {
@@ -152,7 +152,7 @@ async fn run_keyword_search(
         results.extend(semantic_results);
     }
     results.truncate(top_k);
-    println!("✅ Returning {} hybrid keyword search results", results.len());
+    println!("Returning {} hybrid keyword search results", results.len());
     Ok(results)
 }
 
@@ -213,8 +213,8 @@ pub async fn run_search(
     req: SearchRequest,
     redis_conn: &mut Connection,
 ) -> Result<Vec<SearchResult>, Box<dyn Error>> {
-    println!("🔍 Starting search for query: '{}'", req.query);
-    println!("🔍 Patent ID: {:?}, Top K: {}, Mode: {}", req.patent_id, req.top_k, req.search_mode);
+    println!("Starting search for query: '{}'", req.query);
+    println!("Patent ID: {:?}, Top K: {}, Mode: {}", req.patent_id, req.top_k, req.search_mode);
     
     // If keyword mode, use hybrid keyword search
     if req.search_mode == "keyword" {
@@ -224,11 +224,11 @@ pub async fn run_search(
     // Otherwise, use semantic search (existing logic)
     // 1) Embed the query (with caching)
     let q_emb = embed_query(&req.query, redis_conn).await?;
-    println!("✅ Query embedded successfully, embedding length: {}", q_emb.len());
+    println!("Query embedded successfully, embedding length: {}", q_emb.len());
 
     // 2) Execute a vector distance search, binding the Vec<f32> directly
     let rows = if let Some(ref patent_id) = req.patent_id {
-        println!("🔍 Searching for patent_id: {}", patent_id);
+        println!("Searching for patent_id: {}", patent_id);
         sqlx::query(
             r#"
             SELECT patent_id, chunk_id, text AS snippet,
@@ -245,7 +245,7 @@ pub async fn run_search(
         .fetch_all(pool)
         .await?
     } else {
-        println!("🔍 Searching across all patents");
+        println!("Searching across all patents");
         sqlx::query(
             r#"
             SELECT patent_id, chunk_id, text AS snippet,
@@ -262,7 +262,7 @@ pub async fn run_search(
         .await?
     };
 
-    println!("📊 Found {} rows from vector search", rows.len());
+    println!("Found {} rows from vector search", rows.len());
 
     // 3) Map each row into our SearchResult struct
     let mut results = rows
@@ -277,10 +277,10 @@ pub async fn run_search(
 
     // 4) If vector search returned no results, try keyword search as fallback
     if results.is_empty() {
-        println!("⚠️  No results from vector search, trying keyword search...");
+        println!("No results from vector search, trying keyword search...");
         results = run_keyword_search(pool, &req, redis_conn).await?;
     }
 
-    println!("✅ Returning {} search results", results.len());
+    println!("Returning {} search results", results.len());
     Ok(results)
 }

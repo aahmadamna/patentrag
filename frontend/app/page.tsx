@@ -117,7 +117,7 @@ const ChunkViewer: React.FC<ChunkViewerProps> = ({ chunks, searchQuery = '' }) =
             onClick={() => exportSearchResults(chunks, searchQuery)}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
           >
-            📄 Export Results
+                          Export Results
           </button>
         )}
       </div>
@@ -282,7 +282,7 @@ export default function Home() {
         ? { question: input, patent_id: patentId }
         : { query: input, patent_id: patentId, search_mode: 'keyword' };
       
-      console.log('🔍 Frontend sending request:', { endpoint, payload, searchMode });
+      console.log('Frontend sending request:', { endpoint, payload, searchMode });
       
       const res = await fetch(endpoint, {
         method: "POST",
@@ -441,7 +441,7 @@ export default function Home() {
                       summaryLoading ? "bg-gray-400 cursor-not-allowed" : "bg-[#8fc490] hover:bg-[#7bb37e]"
                     }`}
                   >
-                    {summaryLoading ? "Generating Summary..." : "📋 Generate Smart Summary"}
+                    {summaryLoading ? "Generating Summary..." : "Generate Smart Summary"}
                   </button>
                   {summary && (
                     <button
@@ -454,7 +454,7 @@ export default function Home() {
                 </div>
                 {summary && (
                   <div className="bg-white p-6 rounded-lg shadow-md border border-green-200">
-                    <h3 className="text-lg font-semibold mb-3 text-gray-800">📋 Document Summary</h3>
+                    <h3 className="text-lg font-semibold mb-3 text-gray-800">Document Summary</h3>
                     <div className="text-gray-700 whitespace-pre-wrap">{summary}</div>
                   </div>
                 )}
@@ -466,12 +466,12 @@ export default function Home() {
                       relatedDocsLoading ? "bg-gray-400 cursor-not-allowed" : "bg-[#8fc490] hover:bg-[#7bb37e]"
                     }`}
                   >
-                    {relatedDocsLoading ? "Finding Related Documents..." : "🔗 Find Related Documents"}
+                    {relatedDocsLoading ? "Finding Related Documents..." : "Find Related Documents"}
                   </button>
                 </div>
                 {relatedDocs.length > 0 && (
                   <div className="bg-white p-6 rounded-lg shadow-md border border-green-200">
-                    <h3 className="text-lg font-semibold mb-3 text-gray-800">🔗 Related Documents</h3>
+                    <h3 className="text-lg font-semibold mb-3 text-gray-800">Related Documents</h3>
                     <div className="space-y-3">
                       {relatedDocs.map((doc, index) => (
                         <div key={index} className="p-3 bg-gray-50 rounded-md">

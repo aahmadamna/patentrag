@@ -2,7 +2,7 @@ use std::{error::Error, process::Command, fs, path::Path};
 
 /// Extracts all text from the PDF at `path` using pdftotext, falling back to Tesseract OCR if needed.
 pub fn extract_text_from_pdf(path: &str) -> Result<String, Box<dyn Error>> {
-    println!("📖 Starting PDF text extraction from: {}", path);
+    println!("Starting PDF text extraction from: {}", path);
     let pdf_path = Path::new(path);
     let txt_path = pdf_path.with_extension("txt");
 
@@ -25,7 +25,7 @@ pub fn extract_text_from_pdf(path: &str) -> Result<String, Box<dyn Error>> {
     // Check for error patterns or empty output
     let error_pattern = text.contains("?Identity-H") || text.contains("Unimplemented") || text.trim().is_empty();
     if error_pattern {
-        println!("⚠️  pdftotext failed or returned bad output. Falling back to Tesseract OCR...");
+        println!("pdftotext failed or returned bad output. Falling back to Tesseract OCR...");
         text = extract_text_with_tesseract(path)?;
     }
 
@@ -39,8 +39,8 @@ pub fn extract_text_from_pdf(path: &str) -> Result<String, Box<dyn Error>> {
         return Err("No text could be extracted from the PDF. The PDF might be image-based, corrupted, or use unsupported encoding.".into());
     }
 
-    println!("✅ Text extraction completed. Normalized length: {} characters", normalized.len());
-    println!("📄 First 200 characters of normalized text: '{}'", &normalized[..normalized.len().min(200)]);
+    println!("Text extraction completed. Normalized length: {} characters", normalized.len());
+    println!("First 200 characters of normalized text: '{}'", &normalized[..normalized.len().min(200)]);
     Ok(normalized)
 }
 

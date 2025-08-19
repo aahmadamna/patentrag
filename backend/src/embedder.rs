@@ -50,6 +50,6 @@ pub async fn run_embedding_job(pool: &PgPool) -> Result<(), Box<dyn std::error::
         println!("  ({}/{}) chunk {} embedded", idx+1, chunks.len(), chunk_id);
     }
 
-    println!("✅ All chunks embedded.");
+    println!("All chunks embedded.");
     Ok(())
 }

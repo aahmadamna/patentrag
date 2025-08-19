@@ -10,7 +10,7 @@ export function AnswerBox({ answer }: Props) {
   return (
     <Card>
       <CardContent className="p-4">
-        <h2 className="font-semibold mb-2">💡 Answer</h2>
+        <h2 className="font-semibold mb-2">Answer</h2>
         <p>{answer}</p>
       </CardContent>
     </Card>

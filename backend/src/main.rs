@@ -33,7 +33,7 @@ use api::{SearchPayload, SearchResult as ApiSearchResult, QueryPayload, QueryRes
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Patentrag backend starting...");
+    println!("Patentrag backend starting...");
     // Connect to Postgres
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .parse::<u16>()
     .expect("PORT must be a valid u16");
 let addr = SocketAddr::from(([0, 0, 0, 0], port));
-println!("✅ Axum server is about to start...");
+println!("Axum server is about to start...");
 io::stdout().flush().unwrap();
 println!("Listening on http://{}", addr);
 io::stdout().flush().unwrap();
@@ -90,7 +90,7 @@ async fn root() -> Json<serde_json::Value> {
 }
 
 async fn test_search() -> Json<serde_json::Value> {
-    println!("🔍 Test search endpoint called!");
+    println!("Test search endpoint called!");
     Json(json!({ "status": "test_search_working" }))
 }
 
@@ -98,7 +98,7 @@ async fn handle_search(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SearchPayload>,
 ) -> Result<Json<Vec<ApiSearchResult>>, StatusCode> {
-    println!("🔍 handle_search called with mode: {}", payload.search_mode);
+    println!("handle_search called with mode: {}", payload.search_mode);
     let mut redis_conn = state.redis.lock().await;
     let results = search::run_search(
         &state.pg_pool,
@@ -112,7 +112,7 @@ async fn handle_search(
     )
     .await
     .map_err(|e| {
-        println!("❌ Search error: {:?}", e);
+        println!("Search error: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -150,7 +150,7 @@ async fn handle_upload_pdf(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    println!("📄 PDF upload request received");
+    println!("PDF upload request received");
     
     // Only accept one file field named 'file'
     let mut pdf_path = None;
@@ -158,65 +158,65 @@ async fn handle_upload_pdf(
         println!("Received field: {:?}", field.name());
         if field.name() == Some("file") {
             let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_else(|| "uploaded.pdf".to_string());
-            println!("📁 File name: {}", file_name);
+            println!("File name: {}", file_name);
             let save_path = format!("../data/{}", file_name);
-            println!("💾 Saving to: {}", save_path);
+            println!("Saving to: {}", save_path);
             
             let data = field.bytes().await.map_err(|e| {
-                println!("❌ Error reading file bytes: {:?}", e);
+                println!("Error reading file bytes: {:?}", e);
                 StatusCode::BAD_REQUEST
             })?;
-            println!("📊 File size: {} bytes", data.len());
+            println!("File size: {} bytes", data.len());
             
             let mut file = StdFile::create(&save_path).map_err(|e| {
-                println!("❌ Error creating file: {:?}", e);
+                println!("Error creating file: {:?}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
             file.write_all(&data).map_err(|e| {
-                println!("❌ Error writing file: {:?}", e);
+                println!("Error writing file: {:?}", e);
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
             pdf_path = Some(save_path);
-            println!("✅ File saved successfully");
+            println!("File saved successfully");
             break;
         }
     }
     let pdf_path = pdf_path.ok_or_else(|| {
-        println!("❌ No file field found in request");
+        println!("No file field found in request");
         StatusCode::BAD_REQUEST
     })?;
 
     // Extract text from PDF
-    println!("📖 Extracting text from PDF...");
+    println!("Extracting text from PDF...");
     let text = match crate::ingest::extract_text_from_pdf(&pdf_path) {
         Ok(t) => {
-            println!("✅ Text extracted, length: {} characters", t.len());
+            println!("Text extracted, length: {} characters", t.len());
             t
         },
         Err(e) => {
-            println!("❌ Error extracting text: {:?}", e);
+            println!("Error extracting text: {:?}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
 
     // Chunk the text
-    println!("✂️ Chunking text...");
+    println!("Chunking text...");
     let chunks = crate::chunker::chunk_text(&text, 2000, 400);
-    println!("📦 Created {} chunks", chunks.len());
+    println!("Created {} chunks", chunks.len());
     let patent_id = Uuid::new_v4().to_string();
     for (i, chunk) in chunks.iter().enumerate() {
         let chunk_id = format!("{}-{}", patent_id, i);
         if let Err(e) = crate::db::save_chunk(&state.pg_pool, &patent_id, &chunk_id, chunk).await {
-            println!("❌ Error saving chunk {}: {:?}", i, e);
+            println!("Error saving chunk {}: {:?}", i, e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    println!("💾 All chunks saved to database");
+    println!("All chunks saved to database");
 
     // Optionally, trigger embedding job here or let it run in background
     crate::embedder::run_embedding_job(&state.pg_pool).await.ok();
 
-    println!("🎉 PDF upload completed successfully");
+    println!("PDF upload completed successfully");
     Ok(Json(json!({ "status": "ok", "patent_id": patent_id })))
 }
 
